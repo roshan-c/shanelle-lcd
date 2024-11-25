@@ -1,0 +1,6 @@
+../Core/Src/main.c:62:6:spi_write	24	static
+../Core/Src/main.c:74:6:sendCommand	16	static
+../Core/Src/main.c:80:6:sendData	16	static
+../Core/Src/main.c:213:6:SystemClock_Config	80	static,ignoring_inline_asm
+../Core/Src/main.c:91:5:main	56	static
+../Core/Src/main.c:396:6:Error_Handler	0	static,ignoring_inline_asm

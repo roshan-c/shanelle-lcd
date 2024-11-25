@@ -1,29 +1,28 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2024 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <stdio.h>
-#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "font8x8_basic.h"
+#include "font8x8_greek.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,48 +61,36 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// Function to send a command to the ST7565R
-void ST7565_SendCommand(uint8_t command) {
-	HAL_StatusTypeDef result;
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); // CS low
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET); // RS low (command mode)
-    result = HAL_SPI_Transmit(&hspi1, &command, 1, HAL_MAX_DELAY);  // Send command via SPI
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);    // CS high
-
-    // Debug output to UART
-    char msg[30];
-    sprintf(msg, "Command sent: 0x%02X\r\n", command);
-    HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
-
-    if (result != HAL_OK) {
-       	HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // Toggle LED to indicate an error
-       }
-
-    HAL_Delay(100);
-
+void send_command(uint8_t byte) {
+	// Set RS/A0 low (command).
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, &byte, 1, HAL_MAX_DELAY);
 }
 
-// Function to send data to the ST7565R
-void ST7565_SendData(uint8_t data) {
-    HAL_StatusTypeDef result;
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); // CS low
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);   // RS high (data mode)
-    result = HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY); // Send data via SPI
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);    // CS high
-
-    HAL_Delay(100);
-
-    char msg[50];
-    sprintf(msg, "Data sent: 0x%02X\r\n", data);
-    HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
-
-
-    if (result != HAL_OK) {
-        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // Toggle LED to indicate an error
-    }
-
+void send_data(uint8_t byte) {
+	// Set RS/A0 high (data).
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+	HAL_SPI_Transmit(&hspi1, &byte, 1, HAL_MAX_DELAY);
 }
 
+void send_char_bytes(char *bytes) {
+	for (int x = 0; x < 8; x++) {
+		uint8_t col = 0;
+		for (int y = 0; y < 8; y++) {
+			char row = bytes[y];
+			col |= ((row >> x) & 1) << y;
+		}
+		send_data(col);
+	}
+}
+
+void send_char(char ch) {
+	send_char_bytes(font8x8_basic[ch]);
+}
+
+void send_greek_char(int index) {
+	send_char_bytes(font8x8_greek[index]);
+}
 /* USER CODE END 0 */
 
 /**
@@ -138,44 +125,127 @@ int main(void)
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // rse high
-  ST7565_SendCommand(0xE2); // System Reset
-  HAL_Delay(10);
-  ST7565_SendCommand(0xA0); // Set SEG direction (A0 = normal, A1 = reverse)
-  ST7565_SendCommand(0xC8); // Set COM direction (C0 = normal, C8 = reverse)
-  ST7565_SendCommand(0xA2); // Set Bias 1/9 (A2 = 1/9, A3 = 1/7)
-  ST7565_SendCommand(0x2F); // Power control set (Booster, Regulator, and Follower on)
-  ST7565_SendCommand(0xF8); // Set booster ratio
-  ST7565_SendCommand(0x00); // Booster ratio to 4x
-  ST7565_SendCommand(0x27); // Set contrast (electronic volume mode set)
-  ST7565_SendCommand(0x81); // Set V0 voltage regulator internal
-  ST7565_SendCommand(0x10); // Set contrast level
-  ST7565_SendCommand(0xAC); // Static indicator OFF
-  ST7565_SendCommand(0x00); // Static indicator register
-  ST7565_SendCommand(0xA4);
-  ST7565_SendCommand(0xAF); // Display ON
+	// send_command(0xE2); // System Reset
+	// HAL_Delay(10);
 
-  // Fill the display with pixel data for testing
-  for (int page = 0; page < 8; page++) {
-      ST7565_SendCommand(0xB0 + page); // Set page address
-      ST7565_SendCommand(0x00);        // Set lower column address
-      ST7565_SendCommand(0x10);        // Set higher column address
-      for (int column = 0; column < 128; column++) {
-          ST7565_SendData(0xFF);       // Fill with 1s (turn on all pixels in the page)
-      }
-  }
+	// Hardware reset LCD.
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+	HAL_Delay(1);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+	HAL_Delay(10);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
 
+	// Set power control.
+	send_command(0x28 | 0x4);
+	HAL_Delay(50);
+	send_command(0x28 | 0x6);
+	HAL_Delay(50);
+	send_command(0x28 | 0x7);
+	HAL_Delay(50);
+
+	// Set regulation ratio.
+	send_command(0x20 | 0b11);
+
+	// Set SEG direction to normal and COM direction to reverse.
+	send_command(0xA0);
+	send_command(0xC8);
+
+	// Set bias.
+	send_command(0xA3);
+
+	// Set display on.
+	send_command(0xaf);
+
+	// Set contrast.
+	send_command(0x81);
+	send_command(0x30);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-  }
+
+	for (int i = 0; i < 8; i++) {
+		send_command(0xb0 | i);
+		send_command(0x10);
+		send_command(0);
+		for (int x = 0; x < 132; x++) {
+			send_data(0);
+		}
+	}
+
+	send_command(0xb0 | 0); // Set page address 0
+	send_command(0x10 | 0); // Set column address 0
+	send_command(0);
+
+	send_char('H');
+	send_char('E');
+	send_char('L');
+	send_char('L');
+	send_char('O');
+
+	send_command(0xb0 | 1); // Set page address 0
+	send_command(0x10 | 0); // Set column address 0
+	send_command(0);
+
+	send_char('S');
+	send_char('H');
+	send_char('A');
+	send_char('N');
+	send_char('E');
+	send_char('L');
+	send_char('L');
+	send_char('E');
+
+	send_command(0xb0 | 2); // Set page address 0
+	send_command(0x10 | 0); // Set column address 0
+	send_command(0);
+
+	for (char ch = '0'; ch <= '9'; ch++) {
+		send_char(ch);
+	}
+
+	send_command(0xb0 | 3); // Set page address 0
+	send_command(0x10 | 0); // Set column address 0
+	send_command(0);
+
+	for (char ch = '!'; ch <= '+'; ch++) {
+		send_char(ch);
+	}
+
+	send_command(0xb0 | 4); // Set page address 0
+	send_command(0x10 | 0); // Set column address 0
+	send_command(0);
+
+	for (int i = 33; i < 45; i++) {
+		send_greek_char(i);
+	}
+
+	while (1) {
+		HAL_Delay(1);
+	}
+
+//	uint8_t foo = 0;
+//	while (1) {
+//    /* USER CODE END WHILE */
+//
+//    /* USER CODE BEGIN 3 */
+//
+//		for (int i = 0; i < 8; i++) {
+//			send_command(0xb0 | i); // Set page address 0
+//			send_command(0x10 | 0); // Set column address 0
+//			send_command(0);
+//
+//			for (int j = 0; j < 132; j++) {
+//				send_data(j * i);
+//			}
+//		}
+//
+//		foo = !foo;
+//
+//		HAL_Delay(1000);
+//	}
   /* USER CODE END 3 */
 }
 
@@ -199,13 +269,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
-  RCC_OscInitStruct.PLL.PLLN = 8;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
-  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -215,11 +279,11 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     Error_Handler();
   }
@@ -248,13 +312,13 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi1.Init.CRCPolynomial = 7;
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
     Error_Handler();
@@ -281,7 +345,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -331,14 +395,34 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PA5 PA8 PA9 PA10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LED_GREEN_Pin */
+  GPIO_InitStruct.Pin = LED_GREEN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(LED_GREEN_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PC7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -355,11 +439,10 @@ static void MX_GPIO_Init(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1) {
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
